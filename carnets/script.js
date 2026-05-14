@@ -1,5 +1,5 @@
 // ⚠️ PEGA AQUÍ TU URL DE GOOGLE APPS SCRIPT ⚠️
-const URL_GOOGLE_SCRIPT = "https://script.google.com/macros/s/AKfycby3bZTg_ScKdJpnbaHBJyLsLOCnf6DDwoEATlIcT05JKgUJzzzYHWOd2GYbnecdRaH8WA/exec";
+const URL_GOOGLE_SCRIPT = "https://script.google.com/macros/s/AKfycbzm3kTSMyNC6f9Dl-obCpBfENqySo6y5ymBK5Ruj9gwyGEIG3eoJxVwdpiIG-lFwEYbhw/exec";
 
 const form = document.getElementById('carnetForm');
 const previewBtn = document.getElementById('previewBtn');
