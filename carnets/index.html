@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Carnets Blasco Ibáñez</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+    <div class="bubbles">
+        <div class="bubble"></div>
+        <div class="bubble"></div>
+        <div class="bubble"></div>
+        <div class="bubble"></div>
+        <div class="bubble"></div>
+    </div>
+
+    <div class="container">
+        <h2>Emisión de Carnet de exalumno</h2>
+        <form id="carnetForm">
+            <div class="form-group">
+                <label>Nombre del Alumno</label>
+                <input type="text" id="nombre" required placeholder="Ej: Unai">
+            </div>
+            <div class="form-group">
+                <label>Apellidos</label>
+                <input type="text" id="apellido" required placeholder="Ej: Macías">
+            </div>
+            <div class="form-group">
+                <label>Dirección</label>
+                <input type="text" id="direccion" required placeholder="Calle, número...">
+            </div>
+            <div class="form-group">
+                <label>E-mail</label>
+                <input type="email" id="email" required placeholder="alumno@gmail.com / alumno@alu.edu.gva.es / ...">
+            </div>
+            <div class="form-group">
+                <label>Fotografía</label>
+                <input type="file" id="fotoInput" accept="image/*" required>
+            </div>
+
+            <div class="botones-container">
+                <button type="button" id="previewBtn">Vista Previa</button>
+                <button type="submit" id="downloadBtn">Descargar PDF</button>
+            </div>
+        </form>
+    </div>
+
+    <div id="canvasContainer">
+        <h3 id="previewTitle" style="display: none;">Resultado Final</h3>
+        <canvas id="carnetCanvas"></canvas>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>

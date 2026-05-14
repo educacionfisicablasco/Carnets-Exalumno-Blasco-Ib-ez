@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Calibrador de Carnets</title>
+    <style>
+        body { font-family: sans-serif; background: #222; color: white; display: flex; flex-direction: column; align-items: center; }
+        .controles { background: #333; padding: 20px; border-radius: 8px; margin: 10px; position: sticky; top: 0; z-index: 100; display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; border: 1px solid #555; }
+        .control-group { border: 1px solid #444; padding: 10px; border-radius: 5px; }
+        label { display: block; font-size: 12px; color: #aaa; }
+        input { width: 60px; background: #444; color: white; border: 1px solid #666; padding: 4px; }
+        canvas { background: white; margin-top: 20px; box-shadow: 0 0 20px rgba(0,0,0,0.5); cursor: crosshair; }
+        h2 { margin: 10px 0; color: #4dabff; }
+    </style>
+</head>
+<body>
+
+    <h2>🔧 Calibrador de Posiciones</h2>
+
+    <div class="controles">
+        <div class="control-group">
+            <strong>Nombre</strong>
+            <label>X: <input type="number" id="xNom" value="380" oninput="dibujar()"></label>
+            <label>Y: <input type="number" id="yNom" value="365" oninput="dibujar()"></label>
+        </div>
+        <div class="control-group">
+            <strong>Apellido</strong>
+            <label>X: <input type="number" id="xApe" value="380" oninput="dibujar()"></label>
+            <label>Y: <input type="number" id="yApe" value="495" oninput="dibujar()"></label>
+        </div>
+        <div class="control-group">
+            <strong>Dirección</strong>
+            <label>X: <input type="number" id="xDir" value="380" oninput="dibujar()"></label>
+            <label>Y: <input type="number" id="yDir" value="705" oninput="dibujar()"></label>
+        </div>
+        <div class="control-group">
+            <strong>E-mail</strong>
+            <label>X: <input type="number" id="xEmail" value="485" oninput="dibujar()"></label>
+            <label>Y: <input type="number" id="yEmail" value="805" oninput="dibujar()"></label>
+        </div>
+    </div>
+
+    <canvas id="canvas"></canvas>
+
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        const img = new Image();
+        img.src = 'plantilla.jpg'; // DEBE LLAMARSE ASÍ EN TU CARPETA
+
+        img.onload = () => {
+            canvas.width = 1600;
+            canvas.height = 1135;
+            // Escalar visualmente para que quepa en pantalla sin perder resolución interna
+            canvas.style.width = "1000px"; 
+            dibujar();
+        };
+
+        function dibujar() {
+            // Limpiar y poner fondo
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.drawImage(img, 0, 0, 1600, 1135);
+
+            ctx.globalAlpha = 0.5;
+            ctx.fillStyle = "#004dab"; // Azul oscuro
+
+            // Dibujar bloques según los inputs
+            dibujarBloque(getValue('xNom'), getValue('yNom'), 800, 45, "NOMBRE");
+            dibujarBloque(getValue('xApe'), getValue('yApe'), 800, 45, "APELLIDO");
+            dibujarBloque(getValue('xDir'), getValue('yDir'), 800, 35, "DIRECCIÓN");
+            dibujarBloque(getValue('xEmail'), getValue('yEmail'), 700, 35, "EMAIL");
+
+            // Foto fija para referencia
+            ctx.fillStyle = "green";
+            ctx.fillRect(45, 290, 285, 380);
+        }
+
+        function dibujarBloque(x, y, w, h, texto) {
+            ctx.fillRect(x, y - h, w, h);
+            ctx.fillStyle = "white";
+            ctx.font = "20px Arial";
+            ctx.fillText(texto, parseInt(x) + 10, y - 10);
+            ctx.fillStyle = "#004dab";
+        }
+
+        function getValue(id) {
+            return document.getElementById(id).value;
+        }
+    </script>
+</body>
+</html>
