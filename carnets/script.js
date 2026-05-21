@@ -6,6 +6,7 @@ const previewBtn = document.getElementById('previewBtn');
 const canvas = document.getElementById('carnetCanvas');
 const ctx = canvas.getContext('2d');
 let numeroCarnetActual = null;
+let carnetProcesadoBase64 = null; // Guardará el resultado final para no repetir trabajo pesado
 
 // Función para obtener el número de carnet en tiempo real desde Google Sheets
 async function obtenerSiguienteNumero() {
@@ -22,58 +23,28 @@ async function obtenerSiguienteNumero() {
 
 obtenerSiguienteNumero();
 
-// FUNCIÓN AUXILIAR: Comprime la foto del usuario para que el móvil no se sature de RAM
-function optimizarImagenUsuario(file, maxAncho, maxAlto) {
+// FUNCIÓN DE DIBUJO ULTRA-LIGERA (Sin FileReader, usa ObjectURL nativo)
+function dibujarCarnetEstructura() {
     return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = function(e) {
-            const img = new Image();
-            img.onload = function() {
-                const tempCanvas = document.createElement('canvas');
-                let width = img.width;
-                let height = img.height;
+        const fotoFile = document.getElementById('fotoInput').files[0];
+        if (!fotoFile) {
+            reject("Falta foto");
+            return;
+        }
 
-                if (width > height) {
-                    if (width > maxAncho) {
-                        height *= maxAncho / width;
-                        width = maxAncho;
-                    }
-                } else {
-                    if (height > maxAlto) {
-                        width *= maxAlto / height;
-                        height = maxAlto;
-                    }
-                }
-                tempCanvas.width = width;
-                tempCanvas.height = height;
-                const tempCtx = tempCanvas.getContext('2d');
-                tempCtx.drawImage(img, 0, 0, width, height);
-                
-                resolve(tempCanvas.toDataURL('image/jpeg', 0.6)); // Compresión al 60% para máxima ligereza
-            };
-            img.onerror = reject;
-            img.src = e.target.result;
-        };
-        reader.onerror = reject;
-        reader.readAsDataURL(file);
-    });
-}
-
-// FUNCIÓN DE DIBUJO OPTIMIZADA
-async function generarCarnet() {
-    return new Promise((resolve, reject) => {
         const plantilla = new Image();
         plantilla.crossOrigin = "Anonymous";
         plantilla.src = 'plantilla.jpg';
 
-        plantilla.onload = async function() {
+        plantilla.onload = function() {
             const esMovil = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent) || (window.innerWidth <= 800);
-            const escala = esMovil ? 0.5 : 1; // En móvil pesa 4 veces menos en memoria
+            const escala = esMovil ? 0.5 : 1; 
             
             canvas.width = 1600 * escala;
             canvas.height = 1135 * escala;
             ctx.drawImage(plantilla, 0, 0, canvas.width, canvas.height);
 
+            // Textos
             ctx.fillStyle = '#1a1a1a';
             ctx.font = `bold ${Math.round(45 * escala)}px Arial`;
             ctx.fillText(document.getElementById('nombre').value.toUpperCase(), 599 * escala, 427 * escala);
@@ -83,7 +54,6 @@ async function generarCarnet() {
             ctx.fillText(document.getElementById('direccion').value, 609 * escala, 808 * escala);
             ctx.fillText(document.getElementById('email').value, 730 * escala, 887 * escala);
 
-            ctx.fillStyle = '#1a1a1a'; 
             ctx.font = `bold ${Math.round(45 * escala)}px Arial`; 
             ctx.fillText(`Nº ${numeroCarnetActual}`, 1073 * escala, 1019 * escala);
 
@@ -96,82 +66,92 @@ async function generarCarnet() {
             ctx.font = `bold ${Math.round(22 * escala)}px Arial`;
             ctx.fillText(fechaFormateada, 1073 * escala, 1085 * escala); 
 
-            const fotoFile = document.getElementById('fotoInput').files[0];
-            if (!fotoFile) {
-                alert("Selecciona una foto.");
-                return;
-            }
+            // TRUCO MAESTRO: URL de objeto en lugar de FileReader (Consumo de RAM = 0)
+            const urlTemporalFoto = URL.createObjectURL(fotoFile);
+            const fotoImg = new Image();
+            
+            fotoImg.onload = function() {
+                const mX = 48 * escala, mY = 335 * escala, mAncho = 477 * escala, mAlto = 650 * escala;
+                let fX, fY, fAncho, fAlto;
+                const propMarco = mAncho / mAlto;
+                const propFoto = fotoImg.width / fotoImg.height;
 
-            try {
-                const fotoReducidaBase64 = await optimizarImagenUsuario(fotoFile, 400, 550);
+                if (propFoto > propMarco) {
+                    fAlto = fotoImg.height;
+                    fAncho = fotoImg.height * propMarco;
+                    fX = (fotoImg.width - fAncho) / 2; fY = 0;
+                } else {
+                    fAncho = fotoImg.width;
+                    fAlto = fotoImg.width / propMarco;
+                    fX = 0; fY = (fotoImg.height - fAlto) / 2;
+                }
+
+                ctx.drawImage(fotoImg, fX, fY, fAncho, fAlto, mX, mY, mAncho, mAlto);
                 
-                const fotoImg = new Image();
-                fotoImg.onload = function() {
-                    const mX = 48 * escala, mY = 335 * escala, mAncho = 477 * escala, mAlto = 650 * escala;
-                    let fX, fY, fAncho, fAlto;
-                    const propMarco = mAncho / mAlto;
-                    const propFoto = fotoImg.width / fotoImg.height;
-
-                    if (propFoto > propMarco) {
-                        fAlto = fotoImg.height;
-                        fAncho = fotoImg.height * propMarco;
-                        fX = (fotoImg.width - fAncho) / 2; fY = 0;
-                    } else {
-                        fAncho = fotoImg.width;
-                        fAlto = fotoImg.width / propMarco;
-                        fX = 0; fY = (fotoImg.height - fAlto) / 2;
-                    }
-
-                    ctx.drawImage(fotoImg, fX, fY, fAncho, fAlto, mX, mY, mAncho, mAlto);
-                    canvas.style.display = "inline-block";
-                    resolve();
-                };
-                fotoImg.src = fotoReducidaBase64;
-            } catch (err) {
-                reject("Error foto: " + err);
-            }
+                // Extraemos el resultado una sola vez y con compresión optimizada (0.65)
+                carnetProcesadoBase64 = canvas.toDataURL('image/jpeg', 0.65);
+                
+                // Liberamos la memoria del móvil inmediatamente
+                URL.revokeObjectURL(urlTemporalFoto);
+                resolve();
+            };
+            
+            fotoImg.onerror = () => {
+                URL.revokeObjectURL(urlTemporalFoto);
+                reject("Error al cargar foto");
+            };
+            fotoImg.src = urlTemporalFoto;
         };
-        plantilla.onerror = () => reject("No plantilla");
+        plantilla.onerror = () => reject("Error plantilla");
     });
 }
 
-// VISTA PREVIA
+// Disparador inteligente: Dibuja el carnet de forma pasiva en cuanto cambian los datos o la foto
+form.addEventListener('change', () => {
+    if(document.getElementById('fotoInput').files[0]) {
+        dibujarCarnetEstructura().catch(e => console.log("Dibujo en espera: " + e));
+    }
+});
+
+// VISTA PREVIA (Instantánea porque el trabajo ya está hecho)
 previewBtn.addEventListener('click', async () => {
-    if (form.checkValidity()) {
-        try {
-            previewBtn.innerText = "Generando...";
-            previewBtn.disabled = true;
-            
-            await generarCarnet();
-            
-            const imgData = canvas.toDataURL('image/jpeg', 0.7);
-            
-            let contenedorPreview = document.getElementById('previewTitle');
-            if (contenedorPreview) contenedorPreview.style.display = 'block';
-            
-            let imagenExistente = document.getElementById('carnetImgReal');
-            if (!imagenExistente) {
-                imagenExistente = document.createElement('img');
-                imagenExistente.id = 'carnetImgReal';
-                imagenExistente.style.maxWidth = '100%';
-                imagenExistente.style.borderRadius = '15px';
-                imagenExistente.style.boxShadow = '0 10px 25px rgba(0,0,0,0.1)';
-                canvas.parentNode.insertBefore(imagenExistente, canvas.nextSibling);
-            }
-            
-            imagenExistente.src = imgData;
-            canvas.style.display = "none"; 
-            
-            imagenExistente.scrollIntoView({ behavior: 'smooth' });
-            previewBtn.innerText = "Vista Previa";
-            previewBtn.disabled = false;
-        } catch(e) {
-            alert("Error preview: " + e);
-            previewBtn.disabled = false;
-            previewBtn.innerText = "Vista Previa";
-        }
-    } else {
+    if (!form.checkValidity()) {
         form.reportValidity();
+        return;
+    }
+
+    try {
+        previewBtn.innerText = "Mostrando...";
+        previewBtn.disabled = true;
+        
+        // Si por algún motivo no se procesó antes de hacer clic, lo forzamos una vez
+        if (!carnetProcesadoBase64) {
+            await dibujarCarnetEstructura();
+        }
+        
+        let contenedorPreview = document.getElementById('previewTitle');
+        if (contenedorPreview) contenedorPreview.style.display = 'block';
+        
+        let imagenExistente = document.getElementById('carnetImgReal');
+        if (!imagenExistente) {
+            imagenExistente = document.createElement('img');
+            imagenExistente.id = 'carnetImgReal';
+            imagenExistente.style.maxWidth = '100%';
+            imagenExistente.style.borderRadius = '15px';
+            imagenExistente.style.boxShadow = '0 10px 25px rgba(0,0,0,0.1)';
+            canvas.parentNode.insertBefore(imagenExistente, canvas.nextSibling);
+        }
+        
+        imagenExistente.src = carnetProcesadoBase64;
+        canvas.style.display = "none"; 
+        
+        imagenExistente.scrollIntoView({ behavior: 'smooth' });
+        previewBtn.innerText = "Vista Previa";
+        previewBtn.disabled = false;
+    } catch(e) {
+        alert("Por favor, rellena los datos y selecciona una foto primero.");
+        previewBtn.disabled = false;
+        previewBtn.innerText = "Vista Previa";
     }
 });
 
@@ -184,14 +164,17 @@ form.addEventListener('submit', async (e) => {
     downloadBtn.innerText = "Guardando...";
 
     try {
-        await generarCarnet();
+        if (!carnetProcesadoBase64) {
+            await dibujarCarnetEstructura();
+        }
     } catch(err) {
-        alert("Error al procesar: " + err);
+        alert("Error: Asegúrate de rellenar el formulario y subir una foto.");
         downloadBtn.disabled = false;
         downloadBtn.innerText = "Descargar PDF";
         return;
     }
     
+    // Envío de datos a Sheets (Mundo asíncrono aislado)
     const datosAlumno = {
         numero: numeroCarnetActual,
         nombre: document.getElementById('nombre').value,
@@ -209,15 +192,13 @@ form.addEventListener('submit', async (e) => {
         console.error("Error BD:", error);
     }
     
-    // DETECTOR DE MÓVILES
+    // DETECTOR MÓVIL
     const esPantallaPequena = window.innerWidth <= 800;
     const esTactil = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
-    const esUserAgentMovil = /iPhone|iPad|iPod|Android|webOS|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+    const esUserAgentMovil = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
     
     if (esUserAgentMovil || esPantallaPequena || esTactil) {
-        // 🛠️ MODO SEGURO MÓVIL: CERO PDF. SOLO IMAGEN PURA. IMPOSIBLE QUE CRASHEE.
-        const imgData = canvas.toDataURL('image/jpeg', 0.8);
-        
+        // RENDERIZADO FLOTANTE INMEDIATO (Cero carga de CPU)
         const aviso = document.createElement('div');
         aviso.style.position = 'fixed';
         aviso.style.top = '5%';
@@ -237,10 +218,10 @@ form.addEventListener('submit', async (e) => {
         aviso.innerHTML = `
             <h3 style="color:#1e293b; margin-top:0; font-size:22px; font-weight:800;">¡Tu Carnet está listo!</h3>
             <p style="color:#475569; font-size:14px; line-height:1.4; margin-bottom:15px;">
-                ¡Guardado con éxito!<br><br>
-                <b>Mantén pulsada la imagen</b> de abajo y selecciona <b>"Descargar imagen"</b> para guardarla en las fotos de tu móvil.
+                ¡Datos guardados correctamente!<br><br>
+                <b>Mantén pulsada la imagen</b> de abajo y selecciona <b>"Descargar imagen"</b> para guardarla en tu carrete/galería.
             </p>
-            <img src="${imgData}" style="width:100%; max-width:340px; border-radius:15px; margin: 10px 0; border:2px solid #9900ff; box-shadow: 0 5px 15px rgba(0,0,0,0.1);"/>
+            <img src="${carnetProcesadoBase64}" style="width:100%; max-width:340px; border-radius:15px; margin: 10px 0; border:2px solid #9900ff; box-shadow: 0 5px 15px rgba(0,0,0,0.1);"/>
             <br>
             <button id="cerrarAvisoBtn" style="background:linear-gradient(135deg, #0062ff, #9900ff); color:white; border:none; padding:12px 35px; border-radius:50px; font-weight:bold; font-size:16px; margin-top:15px; cursor:pointer;">
                 Volver
@@ -257,7 +238,7 @@ form.addEventListener('submit', async (e) => {
         downloadBtn.innerText = "Descargar PDF";
 
     } else {
-        // MODO PC: Aquí sí ejecutamos jsPDF con total seguridad porque los ordenadores van sobrados de RAM
+        // MODO PC: Solo aquí se invoca a jsPDF
         if (typeof window.jspdf !== 'undefined') {
             const { jsPDF } = window.jspdf;
             const pdf = new jsPDF('p', 'mm', 'a4');
@@ -266,8 +247,7 @@ form.addEventListener('submit', async (e) => {
             const x = (210 - anchoMM) / 2; 
             const y = 20; 
 
-            const imgData = canvas.toDataURL('image/jpeg', 0.9);
-            pdf.addImage(imgData, 'JPEG', x, y, anchoMM, altoMM);
+            pdf.addImage(carnetProcesadoBase64, 'JPEG', x, y, anchoMM, altoMM);
 
             try {
                 pdf.addImage('trasera.jpg', 'JPEG', x, y + altoMM, anchoMM, altoMM);
@@ -280,11 +260,11 @@ form.addEventListener('submit', async (e) => {
             pdf.line(x, y + altoMM, x + anchoMM, y + altoMM);
             
             pdf.save(`Carnet_${document.getElementById('nombre').value}.pdf`);
-        } else {
-            alert("Error al cargar el motor de PDF en ordenador.");
         }
     }
 
+    // Resetear variable al terminar para el siguiente alumno
+    carnetProcesadoBase64 = null;
     obtenerSiguienteNumero().then(() => {
         downloadBtn.disabled = false;
         downloadBtn.innerText = "Descargar PDF";
