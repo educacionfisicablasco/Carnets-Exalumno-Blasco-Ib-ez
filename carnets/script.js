@@ -49,8 +49,7 @@ function optimizarImagenUsuario(file, maxAncho, maxAlto) {
                 const tempCtx = tempCanvas.getContext('2d');
                 tempCtx.drawImage(img, 0, 0, width, height);
                 
-                // Devolvemos la imagen ultra-comprimida en JPEG de baja carga
-                resolve(tempCanvas.toDataURL('image/jpeg', 0.7));
+                resolve(tempCanvas.toDataURL('image/jpeg', 0.6)); // Compresión al 60% para máxima ligereza
             };
             img.onerror = reject;
             img.src = e.target.result;
@@ -69,7 +68,7 @@ async function generarCarnet() {
 
         plantilla.onload = async function() {
             const esMovil = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent) || (window.innerWidth <= 800);
-            const escala = esMovil ? 0.5 : 1;
+            const escala = esMovil ? 0.5 : 1; // En móvil pesa 4 veces menos en memoria
             
             canvas.width = 1600 * escala;
             canvas.height = 1135 * escala;
@@ -104,8 +103,7 @@ async function generarCarnet() {
             }
 
             try {
-                // Comprimimos la foto del alumno sobre la marcha a un tamaño ridículamente ligero para la RAM
-                const fotoReducidaBase64 = await optimizarImagenUsuario(fotoFile, 500, 700);
+                const fotoReducidaBase64 = await optimizarImagenUsuario(fotoFile, 400, 550);
                 
                 const fotoImg = new Image();
                 fotoImg.onload = function() {
@@ -130,10 +128,10 @@ async function generarCarnet() {
                 };
                 fotoImg.src = fotoReducidaBase64;
             } catch (err) {
-                reject("Error al procesar la foto del usuario: " + err);
+                reject("Error foto: " + err);
             }
         };
-        plantilla.onerror = () => reject("No se pudo cargar la plantilla.jpg");
+        plantilla.onerror = () => reject("No plantilla");
     });
 }
 
@@ -146,7 +144,7 @@ previewBtn.addEventListener('click', async () => {
             
             await generarCarnet();
             
-            const imgData = canvas.toDataURL('image/jpeg', 0.8);
+            const imgData = canvas.toDataURL('image/jpeg', 0.7);
             
             let contenedorPreview = document.getElementById('previewTitle');
             if (contenedorPreview) contenedorPreview.style.display = 'block';
@@ -168,7 +166,7 @@ previewBtn.addEventListener('click', async () => {
             previewBtn.innerText = "Vista Previa";
             previewBtn.disabled = false;
         } catch(e) {
-            alert("Error en vista previa: " + e);
+            alert("Error preview: " + e);
             previewBtn.disabled = false;
             previewBtn.innerText = "Vista Previa";
         }
@@ -211,11 +209,13 @@ form.addEventListener('submit', async (e) => {
         console.error("Error BD:", error);
     }
     
+    // DETECTOR DE MÓVILES
     const esPantallaPequena = window.innerWidth <= 800;
     const esTactil = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
     const esUserAgentMovil = /iPhone|iPad|iPod|Android|webOS|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
     
     if (esUserAgentMovil || esPantallaPequena || esTactil) {
+        // 🛠️ MODO SEGURO MÓVIL: CERO PDF. SOLO IMAGEN PURA. IMPOSIBLE QUE CRASHEE.
         const imgData = canvas.toDataURL('image/jpeg', 0.8);
         
         const aviso = document.createElement('div');
@@ -237,13 +237,13 @@ form.addEventListener('submit', async (e) => {
         aviso.innerHTML = `
             <h3 style="color:#1e293b; margin-top:0; font-size:22px; font-weight:800;">¡Tu Carnet está listo!</h3>
             <p style="color:#475569; font-size:14px; line-height:1.4; margin-bottom:15px;">
-                Debido a los bloqueos de seguridad de tu navegador móvil:<br>
-                <b>Mantén pulsada la imagen</b> de abajo y selecciona <b>"Descargar imagen"</b> para guardarla en tu galería.
+                ¡Guardado con éxito!<br><br>
+                <b>Mantén pulsada la imagen</b> de abajo y selecciona <b>"Descargar imagen"</b> para guardarla en las fotos de tu móvil.
             </p>
             <img src="${imgData}" style="width:100%; max-width:340px; border-radius:15px; margin: 10px 0; border:2px solid #9900ff; box-shadow: 0 5px 15px rgba(0,0,0,0.1);"/>
             <br>
             <button id="cerrarAvisoBtn" style="background:linear-gradient(135deg, #0062ff, #9900ff); color:white; border:none; padding:12px 35px; border-radius:50px; font-weight:bold; font-size:16px; margin-top:15px; cursor:pointer;">
-                Volver al formulario
+                Volver
             </button>
         `;
         
@@ -257,27 +257,32 @@ form.addEventListener('submit', async (e) => {
         downloadBtn.innerText = "Descargar PDF";
 
     } else {
-        const { jsPDF } = window.jspdf;
-        const pdf = new jsPDF('p', 'mm', 'a4');
-        const anchoMM = 120; 
-        const altoMM = 85;   
-        const x = (210 - anchoMM) / 2; 
-        const y = 20; 
+        // MODO PC: Aquí sí ejecutamos jsPDF con total seguridad porque los ordenadores van sobrados de RAM
+        if (typeof window.jspdf !== 'undefined') {
+            const { jsPDF } = window.jspdf;
+            const pdf = new jsPDF('p', 'mm', 'a4');
+            const anchoMM = 120; 
+            const altoMM = 85;   
+            const x = (210 - anchoMM) / 2; 
+            const y = 20; 
 
-        const imgData = canvas.toDataURL('image/jpeg', 0.9);
-        pdf.addImage(imgData, 'JPEG', x, y, anchoMM, altoMM);
+            const imgData = canvas.toDataURL('image/jpeg', 0.9);
+            pdf.addImage(imgData, 'JPEG', x, y, anchoMM, altoMM);
 
-        try {
-            pdf.addImage('trasera.jpg', 'JPEG', x, y + altoMM, anchoMM, altoMM);
-        } catch (e) {
-            pdf.setDrawColor(200);
-            pdf.rect(x, y + altoMM, anchoMM, altoMM);
+            try {
+                pdf.addImage('trasera.jpg', 'JPEG', x, y + altoMM, anchoMM, altoMM);
+            } catch (e) {
+                pdf.setDrawColor(200);
+                pdf.rect(x, y + altoMM, anchoMM, altoMM);
+            }
+
+            pdf.setLineDash([1, 1], 0);
+            pdf.line(x, y + altoMM, x + anchoMM, y + altoMM);
+            
+            pdf.save(`Carnet_${document.getElementById('nombre').value}.pdf`);
+        } else {
+            alert("Error al cargar el motor de PDF en ordenador.");
         }
-
-        pdf.setLineDash([1, 1], 0);
-        pdf.line(x, y + altoMM, x + anchoMM, y + altoMM);
-        
-        pdf.save(`Carnet_${document.getElementById('nombre').value}.pdf`);
     }
 
     obtenerSiguienteNumero().then(() => {
