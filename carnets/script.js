@@ -23,33 +23,39 @@ async function obtenerSiguienteNumero() {
 // Llamamos a la función nada más cargar la web para tener el número listo
 obtenerSiguienteNumero();
 
-// FUNCIÓN DE DIBUJO (Con tus coordenadas y campos integrados)
+// FUNCIÓN DE DIBUJO OPTIMIZADA (Para evitar que pete el móvil reduciendo resolución a la mitad)
 async function generarCarnet() {
     return new Promise((resolve, reject) => {
         const plantilla = new Image();
-        // FIX MÓVILES: Evita que el canvas se bloquee por seguridad al exportar en Safari/Chrome móvil
         plantilla.crossOrigin = "Anonymous";
         plantilla.src = 'plantilla.jpg';
 
         plantilla.onload = function() {
-            canvas.width = 1600;
-            canvas.height = 1135;
-            ctx.drawImage(plantilla, 0, 0, 1600, 1135);
-
-            ctx.fillStyle = '#1a1a1a';
-            ctx.font = 'bold 45px Arial';
+            // DETECTOR DE MÓVIL PARA AJUSTAR LA RESOLUCIÓN Y AHORRAR RAM
+            const esMovil = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent) || (window.innerWidth <= 800);
             
-            ctx.fillText(document.getElementById('nombre').value.toUpperCase(), 599, 427);
-            ctx.fillText(document.getElementById('apellido').value.toUpperCase(), 599, 561);
+            // Si es móvil, usamos la mitad de resolución (escala 0.5) para que no crasheé. En PC, 100% (escala 1).
+            const escala = esMovil ? 0.5 : 1;
+            
+            canvas.width = 1600 * escala;
+            canvas.height = 1135 * escala;
+            ctx.drawImage(plantilla, 0, 0, canvas.width, canvas.height);
 
-            ctx.font = '35px Arial';
-            ctx.fillText(document.getElementById('direccion').value, 609, 808);
-            ctx.fillText(document.getElementById('email').value, 730, 887);
+            // Ajustamos las fuentes según la escala del lienzo
+            ctx.fillStyle = '#1a1a1a';
+            ctx.font = `bold ${Math.round(45 * escala)}px Arial`;
+            
+            ctx.fillText(document.getElementById('nombre').value.toUpperCase(), 599 * escala, 427 * escala);
+            ctx.fillText(document.getElementById('apellido').value.toUpperCase(), 599 * escala, 561 * escala);
+
+            ctx.font = `${Math.round(35 * escala)}px Arial`;
+            ctx.fillText(document.getElementById('direccion').value, 609 * escala, 808 * escala);
+            ctx.fillText(document.getElementById('email').value, 730 * escala, 887 * escala);
 
             // --- DIBUJAR NÚMERO DE CARNET AUTOMÁTICO ---
             ctx.fillStyle = '#1a1a1a'; 
-            ctx.font = 'bold 45px Arial'; 
-            ctx.fillText(`Nº ${numeroCarnetActual}`, 1073, 1019); // Tus coordenadas exactas
+            ctx.font = `bold ${Math.round(45 * escala)}px Arial`; 
+            ctx.fillText(`Nº ${numeroCarnetActual}`, 1073 * escala, 1019 * escala);
 
             const hoy = new Date();
             const dia = String(hoy.getDate()).padStart(2, '0');
@@ -57,8 +63,8 @@ async function generarCarnet() {
             const anio = hoy.getFullYear();
             const fechaFormateada = `${dia}/${mes}/${anio}`;
 
-            ctx.font = 'bold 22px Arial';
-            ctx.fillText(fechaFormateada, 1073, 1085); 
+            ctx.font = `bold ${Math.round(22 * escala)}px Arial`;
+            ctx.fillText(fechaFormateada, 1073 * escala, 1085 * escala); 
 
             const fotoFile = document.getElementById('fotoInput').files[0];
             if (!fotoFile) {
@@ -70,7 +76,8 @@ async function generarCarnet() {
             reader.onload = function(event) {
                 const fotoImg = new Image();
                 fotoImg.onload = function() {
-                    const mX = 48, mY = 335, mAncho = 477, mAlto = 650;
+                    // Escalamos las coordenadas del marco de la foto del alumno
+                    const mX = 48 * escala, mY = 335 * escala, mAncho = 477 * escala, mAlto = 650 * escala;
                     let fX, fY, fAncho, fAlto;
                     const propMarco = mAncho / mAlto;
                     const propFoto = fotoImg.width / fotoImg.height;
@@ -97,7 +104,7 @@ async function generarCarnet() {
     });
 }
 
-// VISTA PREVIA
+// VISTA PREVIA (Convertida a imagen real para evitar congelamientos en móviles)
 previewBtn.addEventListener('click', async () => {
     if (form.checkValidity()) {
         try {
@@ -106,7 +113,7 @@ previewBtn.addEventListener('click', async () => {
             
             await generarCarnet();
             
-            // FIX ANDROID/MÓVIL: Convertimos el canvas a imagen real para asegurar que se vea
+            // Convertimos el canvas a formato imagen estándar
             const imgData = canvas.toDataURL('image/jpeg', 0.9);
             
             let contenedorPreview = document.getElementById('previewTitle');
@@ -123,7 +130,7 @@ previewBtn.addEventListener('click', async () => {
             }
             
             imagenExistente.src = imgData;
-            canvas.style.display = "none"; // Ocultamos el canvas conflictivo en móvil
+            canvas.style.display = "none"; // Escondemos el canvas para liberar RAM en el móvil
             
             imagenExistente.scrollIntoView({ behavior: 'smooth' });
             previewBtn.innerText = "Vista Previa";
@@ -138,7 +145,7 @@ previewBtn.addEventListener('click', async () => {
     }
 });
 
-// FORMULARIO SUBMIT: Envía a Google Sheets y muestra descarga
+// FORMULARIO SUBMIT: Envía a Google Sheets y procesa la descarga o el Plan de Emergencia
 form.addEventListener('submit', async (e) => {
     e.preventDefault();
     
@@ -149,7 +156,7 @@ form.addEventListener('submit', async (e) => {
     try {
         await generarCarnet();
     } catch(err) {
-        alert("Error al procesar el carnet: " + err);
+        alert("Error al procesar: " + err);
         downloadBtn.disabled = false;
         downloadBtn.innerText = "Descargar PDF";
         return;
@@ -170,21 +177,18 @@ form.addEventListener('submit', async (e) => {
             body: JSON.stringify(datosAlumno)
         });
     } catch (error) {
-        console.error("Error al guardar en la base de datos:", error);
+        console.error("Error BD:", error);
     }
     
-    // 2. DETECTOR DE MÓVIL REFORZADO (Filtra pantallas pequeñas, pantallas táctiles y UserAgent)
+    // 2. DETECTOR DE DISPOSITIVOS MÓVILES REFORZADO
     const esPantallaPequena = window.innerWidth <= 800;
     const esTactil = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
     const esUserAgentMovil = /iPhone|iPad|iPod|Android|webOS|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
     
-    // Si cumple cualquiera de las tres, se activa el modo móvil
     if (esUserAgentMovil || esPantallaPequena || esTactil) {
+        // MODO MÓVIL: Cartel flotante nativo con compresión optimizada
+        const imgData = canvas.toDataURL('image/jpeg', 0.9);
         
-        // Convertimos a imagen de alta calidad
-        const imgData = canvas.toDataURL('image/jpeg', 1.0);
-        
-        // Creamos el cartel flotante de emergencia
         const aviso = document.createElement('div');
         aviso.style.position = 'fixed';
         aviso.style.top = '5%';
@@ -204,12 +208,12 @@ form.addEventListener('submit', async (e) => {
         aviso.innerHTML = `
             <h3 style="color:#1e293b; margin-top:0; font-size:22px; font-weight:800;">¡Tu Carnet está listo!</h3>
             <p style="color:#475569; font-size:14px; line-height:1.4; margin-bottom:15px;">
-                Debido a las normas de seguridad de tu móvil, debes guardarlo manualmente:<br>
-                <b>Mantén pulsada la imagen</b> y selecciona <b>"Descargar imagen"</b> (o "Guardar en carrete").
+                Debido a los bloqueos de seguridad de tu navegador móvil:<br>
+                <b>Mantén pulsada la imagen</b> de abajo y selecciona <b>"Descargar imagen"</b> para guardarla en tu galería.
             </p>
             <img src="${imgData}" style="width:100%; max-width:340px; border-radius:15px; margin: 10px 0; border:2px solid #9900ff; box-shadow: 0 5px 15px rgba(0,0,0,0.1);"/>
             <br>
-            <button id="cerrarAvisoBtn" style="background:linear-gradient(135deg, #0062ff, #9900ff); color:white; border:none; padding:12px 35px; border-radius:50px; font-weight:bold; font-size:16px; margin-top:15px; cursor:pointer; box-shadow:0 5px 15px rgba(0,98,255,0.3);">
+            <button id="cerrarAvisoBtn" style="background:linear-gradient(135deg, #0062ff, #9900ff); color:white; border:none; padding:12px 35px; border-radius:50px; font-weight:bold; font-size:16px; margin-top:15px; cursor:pointer;">
                 Volver al formulario
             </button>
         `;
@@ -224,7 +228,7 @@ form.addEventListener('submit', async (e) => {
         downloadBtn.innerText = "Descargar PDF";
 
     } else {
-        // En ordenadores (PC/Mac) el sistema jsPDF tradicional de descarga directa
+        // MODO PC/DESKTOP: Generación y descarga tradicional de jsPDF
         const { jsPDF } = window.jspdf;
         const pdf = new jsPDF('p', 'mm', 'a4');
         const anchoMM = 120; 
@@ -248,7 +252,7 @@ form.addEventListener('submit', async (e) => {
         pdf.save(`Carnet_${document.getElementById('nombre').value}.pdf`);
     }
 
-    // 3. Actualizar número para el próximo carnet
+    // 3. Actualizar número para la siguiente petición
     obtenerSiguienteNumero().then(() => {
         downloadBtn.disabled = false;
         downloadBtn.innerText = "Descargar PDF";
