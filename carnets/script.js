@@ -1,4 +1,4 @@
-// ⚠️ PEGA AQUÍ TU URL DE GOOGLE APPS SCRIPT ⚠️
+// ⚠️ URL DE GOOGLE APPS SCRIPT
 const URL_GOOGLE_SCRIPT = "https://script.google.com/macros/s/AKfycbxJrZBBdg_HgoKGFqm_Hk0SEsNS5zETTO86yi_U8cPdxIderH5eKtXDOH4YqxeQAL1-/exec";
 
 const form = document.getElementById('carnetForm');
@@ -27,6 +27,8 @@ obtenerSiguienteNumero();
 async function generarCarnet() {
     return new Promise((resolve, reject) => {
         const plantilla = new Image();
+        // 🛠️ FIX MÓVILES: Evita que el canvas se bloquee por seguridad al exportar en Safari/Chrome móvil
+        plantilla.crossOrigin = "Anonymous";
         plantilla.src = 'plantilla.jpg';
 
         plantilla.onload = function() {
@@ -44,7 +46,7 @@ async function generarCarnet() {
             ctx.fillText(document.getElementById('direccion').value, 609, 808);
             ctx.fillText(document.getElementById('email').value, 730, 887);
 
-            // --- NUEVO: DIBUJAR NÚMERO DE CARNET AUTOMÁTICO ---
+            // --- DIBUJAR NÚMERO DE CARNET AUTOMÁTICO ---
             ctx.fillStyle = '#1a1a1a'; 
             ctx.font = 'bold 45px Arial'; 
             ctx.fillText(`Nº ${numeroCarnetActual}`, 1073, 1019); // Tus coordenadas exactas
@@ -98,10 +100,14 @@ async function generarCarnet() {
 // VISTA PREVIA
 previewBtn.addEventListener('click', async () => {
     if (form.checkValidity()) {
-        await generarCarnet();
-        // Mostrar el título de resultado final que estaba oculto
-        document.getElementById('previewTitle').style.display = 'block';
-        canvas.scrollIntoView({ behavior: 'smooth' });
+        try {
+            await generarCarnet();
+            // Mostrar el título de resultado final que estaba oculto
+            document.getElementById('previewTitle').style.display = 'block';
+            canvas.scrollIntoView({ behavior: 'smooth' });
+        } catch(e) {
+            alert("Error al generar la vista previa: " + e);
+        }
     } else {
         form.reportValidity();
     }
@@ -115,7 +121,14 @@ form.addEventListener('submit', async (e) => {
     downloadBtn.disabled = true;
     downloadBtn.innerText = "Guardando...";
 
-    await generarCarnet();
+    try {
+        await generarCarnet();
+    } catch(err) {
+        alert("Error al procesar el carnet: " + err);
+        downloadBtn.disabled = false;
+        downloadBtn.innerText = "Descargar PDF";
+        return;
+    }
     
     // 1. Guardar los datos en el Google Sheet en segundo plano
     const datosAlumno = {
@@ -135,9 +148,9 @@ form.addEventListener('submit', async (e) => {
         console.error("No se pudo guardar en la base de datos:", error);
     }
     
-    // 2. Generar y descargar el PDF
+    // 2. Generar el PDF
     const { jsPDF } = window.jspdf;
-    const pdf = new jspdf.jsPDF('p', 'mm', 'a4');
+    const pdf = new jsPDF('p', 'mm', 'a4');
 
     const anchoMM = 120; 
     const altoMM = 85;   
@@ -148,9 +161,13 @@ form.addEventListener('submit', async (e) => {
     pdf.addImage(imgData, 'JPEG', x, y, anchoMM, altoMM);
 
     try {
+        // Creamos objeto oculto de imagen trasera para asegurar compatibilidad móvil
+        const traseraImg = new Image();
+        traseraImg.crossOrigin = "Anonymous";
+        traseraImg.src = 'trasera.jpg';
         pdf.addImage('trasera.jpg', 'JPEG', x, y + altoMM, anchoMM, altoMM);
     } catch (error) {
-        console.error("Falta el archivo trasera.jpg");
+        console.error("Falta el archivo trasera.jpg o error de carga");
         pdf.setDrawColor(200);
         pdf.rect(x, y + altoMM, anchoMM, altoMM);
     }
@@ -158,7 +175,21 @@ form.addEventListener('submit', async (e) => {
     pdf.setLineDash([1, 1], 0);
     pdf.line(x, y + altoMM, x + anchoMM, y + altoMM);
 
-    pdf.save(`Carnet_${document.getElementById('nombre').value}.pdf`);
+    const nombreArchivo = `Carnet_${document.getElementById('nombre').value}.pdf`;
+
+    // 🛠️ FIX DEFINITIVO PARA DESCARGAS EN MÓVILES
+    const esMovil = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+    
+    if (esMovil) {
+        // En móviles convertimos el PDF a una URL Blob y lo abrimos directamente en pestaña nueva
+        // Evita que los bloqueadores de descargas rompan la experiencia
+        const blob = pdf.output('blob');
+        const blobURL = URL.createObjectURL(blob);
+        window.open(blobURL, '_blank');
+    } else {
+        // En ordenadores la descarga tradicional directa sigue activa
+        pdf.save(nombreArchivo);
+    }
 
     // 3. Volver a consultar el siguiente número para el próximo carnet
     obtenerSiguienteNumero().then(() => {
