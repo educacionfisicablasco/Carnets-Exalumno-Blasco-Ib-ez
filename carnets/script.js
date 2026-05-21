@@ -1,4 +1,4 @@
-// ⚠️ URL DE GOOGLE APPS SCRIPT
+// ⚠️ PEGA AQUÍ TU URL DE GOOGLE APPS SCRIPT ⚠️
 const URL_GOOGLE_SCRIPT = "https://script.google.com/macros/s/AKfycbxJrZBBdg_HgoKGFqm_Hk0SEsNS5zETTO86yi_U8cPdxIderH5eKtXDOH4YqxeQAL1-/exec";
 
 const form = document.getElementById('carnetForm');
@@ -27,7 +27,7 @@ obtenerSiguienteNumero();
 async function generarCarnet() {
     return new Promise((resolve, reject) => {
         const plantilla = new Image();
-        // 🛠️ FIX MÓVILES: Evita que el canvas se bloquee por seguridad al exportar en Safari/Chrome móvil
+        // FIX MÓVILES: Evita que el canvas se bloquee por seguridad al exportar en Safari/Chrome móvil
         plantilla.crossOrigin = "Anonymous";
         plantilla.src = 'plantilla.jpg';
 
@@ -101,19 +101,44 @@ async function generarCarnet() {
 previewBtn.addEventListener('click', async () => {
     if (form.checkValidity()) {
         try {
+            previewBtn.innerText = "Generando...";
+            previewBtn.disabled = true;
+            
             await generarCarnet();
-            // Mostrar el título de resultado final que estaba oculto
-            document.getElementById('previewTitle').style.display = 'block';
-            canvas.scrollIntoView({ behavior: 'smooth' });
+            
+            // FIX ANDROID/MÓVIL: Convertimos el canvas a imagen real para asegurar que se vea
+            const imgData = canvas.toDataURL('image/jpeg', 0.9);
+            
+            let contenedorPreview = document.getElementById('previewTitle');
+            if (contenedorPreview) contenedorPreview.style.display = 'block';
+            
+            let imagenExistente = document.getElementById('carnetImgReal');
+            if (!imagenExistente) {
+                imagenExistente = document.createElement('img');
+                imagenExistente.id = 'carnetImgReal';
+                imagenExistente.style.maxWidth = '100%';
+                imagenExistente.style.borderRadius = '15px';
+                imagenExistente.style.boxShadow = '0 10px 25px rgba(0,0,0,0.1)';
+                canvas.parentNode.insertBefore(imagenExistente, canvas.nextSibling);
+            }
+            
+            imagenExistente.src = imgData;
+            canvas.style.display = "none"; // Ocultamos el canvas conflictivo en móvil
+            
+            imagenExistente.scrollIntoView({ behavior: 'smooth' });
+            previewBtn.innerText = "Vista Previa";
+            previewBtn.disabled = false;
         } catch(e) {
-            alert("Error al generar la vista previa: " + e);
+            alert("Error en vista previa: " + e);
+            previewBtn.disabled = false;
+            previewBtn.innerText = "Vista Previa";
         }
     } else {
         form.reportValidity();
     }
 });
 
-// FORMULARIO SUBMIT: Envía a Google Sheets y descarga el PDF
+// FORMULARIO SUBMIT: Envía a Google Sheets y descarga
 form.addEventListener('submit', async (e) => {
     e.preventDefault();
     
@@ -124,13 +149,13 @@ form.addEventListener('submit', async (e) => {
     try {
         await generarCarnet();
     } catch(err) {
-        alert("Error al procesar el carnet: " + err);
+        alert("Error al procesar: " + err);
         downloadBtn.disabled = false;
         downloadBtn.innerText = "Descargar PDF";
         return;
     }
     
-    // 1. Guardar los datos en el Google Sheet en segundo plano
+    // 1. Guardar los datos en el Google Sheet
     const datosAlumno = {
         numero: numeroCarnetActual,
         nombre: document.getElementById('nombre').value,
@@ -140,60 +165,82 @@ form.addEventListener('submit', async (e) => {
     try {
         await fetch(URL_GOOGLE_SCRIPT, {
             method: 'POST',
-            mode: 'no-cors', // Evita problemas de CORS
+            mode: 'no-cors',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(datosAlumno)
         });
     } catch (error) {
-        console.error("No se pudo guardar en la base de datos:", error);
+        console.error("Error BD:", error);
     }
     
-    // 2. Generar el PDF
-    const { jsPDF } = window.jspdf;
-    const pdf = new jsPDF('p', 'mm', 'a4');
-
-    const anchoMM = 120; 
-    const altoMM = 85;   
-    const x = (210 - anchoMM) / 2; 
-    const y = 20; 
-
-    const imgData = canvas.toDataURL('image/jpeg', 1.0);
-    pdf.addImage(imgData, 'JPEG', x, y, anchoMM, altoMM);
-
-    try {
-        // Creamos objeto oculto de imagen trasera para asegurar compatibilidad móvil
-        const traseraImg = new Image();
-        traseraImg.crossOrigin = "Anonymous";
-        traseraImg.src = 'trasera.jpg';
-        pdf.addImage('trasera.jpg', 'JPEG', x, y + altoMM, anchoMM, altoMM);
-    } catch (error) {
-        console.error("Falta el archivo trasera.jpg o error de carga");
-        pdf.setDrawColor(200);
-        pdf.rect(x, y + altoMM, anchoMM, altoMM);
-    }
-
-    pdf.setLineDash([1, 1], 0);
-    pdf.line(x, y + altoMM, x + anchoMM, y + altoMM);
-
-    const nombreArchivo = `Carnet_${document.getElementById('nombre').value}.pdf`;
-
-    // 🛠️ FIX DEFINITIVO PARA DESCARGAS EN MÓVILES
+    // 2. Descarga del PDF o Alternativa lesiva para Móviles
     const esMovil = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
     
     if (esMovil) {
-        // En móviles convertimos el PDF a una URL Blob y lo abrimos directamente en pestaña nueva
-        // Evita que los bloqueadores de descargas rompan la experiencia
-        const blob = pdf.output('blob');
-        const blobURL = URL.createObjectURL(blob);
-        window.open(blobURL, '_blank');
-    } else {
-        // En ordenadores la descarga tradicional directa sigue activa
-        pdf.save(nombreArchivo);
-    }
+        // PLAN DE EMERGENCIA ANDROID: Mostramos la imagen para descargar con el dedo de forma nativa
+        const imgData = canvas.toDataURL('image/jpeg', 1.0);
+        
+        const aviso = document.createElement('div');
+        aviso.style.position = 'fixed';
+        aviso.style.top = '10%';
+        aviso.style.left = '5%';
+        aviso.style.width = '90%';
+        aviso.style.backgroundColor = '#ffffff';
+        aviso.style.boxShadow = '0 20px 50px rgba(0,0,0,0.3)';
+        aviso.style.borderRadius = '20px';
+        aviso.style.padding = '25px';
+        aviso.style.zIndex = '999999';
+        aviso.style.textAlign = 'center';
+        aviso.style.fontFamily = 'sans-serif';
+        aviso.style.boxSizing = 'border-box';
+        
+        aviso.innerHTML = `
+            <h3 style="color:#1e293b; margin-top:0;">¡Carnet Listo!</h3>
+            <p style="color:#475569; font-size:14px;">En móviles, mantén pulsada la imagen de abajo y selecciona <b>"Descargar imagen"</b> para guardarla en tu galería.</p>
+            <img src="${imgData}" style="width:100%; max-width:350px; border-radius:10px; margin: 15px 0; border:1px solid #ddd;"/>
+            <br>
+            <button id="cerrarAvisoBtn" style="background:#0062ff; color:white; border:none; padding:10px 25px; border-radius:50px; font-weight:bold; margin-top:10px;">Entendido</button>
+        `;
+        
+        document.body.appendChild(aviso);
+        
+        document.getElementById('cerrarAvisoBtn').addEventListener('click', () => {
+            document.body.removeChild(aviso);
+        });
 
-    // 3. Volver a consultar el siguiente número para el próximo carnet
-    obtenerSiguienteNumero().then(() => {
         downloadBtn.disabled = false;
         downloadBtn.innerText = "Descargar PDF";
+
+    } else {
+        // En ordenadores el sistema jsPDF tradicional funciona perfecto
+        const { jsPDF } = window.jspdf;
+        const pdf = new jsPDF('p', 'mm', 'a4');
+        const anchoMM = 120; 
+        const altoMM = 85;   
+        const x = (210 - anchoMM) / 2; 
+        const y = 20; 
+
+        const imgData = canvas.toDataURL('image/jpeg', 1.0);
+        pdf.addImage(imgData, 'JPEG', x, y, anchoMM, altoMM);
+
+        try {
+            pdf.addImage('trasera.jpg', 'JPEG', x, y + altoMM, anchoMM, altoMM);
+        } catch (e) {
+            pdf.setDrawColor(200);
+            pdf.rect(x, y + altoMM, anchoMM, altoMM);
+        }
+
+        pdf.setLineDash([1, 1], 0);
+        pdf.line(x, y + altoMM, x + anchoMM, y + altoMM);
+        
+        pdf.save(`Carnet_${document.getElementById('nombre').value}.pdf`);
+    }
+
+    // 3. Actualizar número para el próximo
+    obtenerSiguienteNumero().then(() => {
+        if (!esMovil) {
+            downloadBtn.disabled = false;
+            downloadBtn.innerText = "Descargar PDF";
+        }
     });
 });
