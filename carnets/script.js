@@ -16,35 +16,67 @@ async function obtenerSiguienteNumero() {
         console.log("Siguiente número de carnet obtenido:", numeroCarnetActual);
     } catch (error) {
         console.error("Error al obtener el número de carnet:", error);
-        numeroCarnetActual = "??"; // Número de emergencia por si falla la conexión
+        numeroCarnetActual = "??"; 
     }
 }
 
-// Llamamos a la función nada más cargar la web para tener el número listo
 obtenerSiguienteNumero();
 
-// FUNCIÓN DE DIBUJO OPTIMIZADA (Para evitar que pete el móvil reduciendo resolución a la mitad)
+// FUNCIÓN AUXILIAR: Comprime la foto del usuario para que el móvil no se sature de RAM
+function optimizarImagenUsuario(file, maxAncho, maxAlto) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            const img = new Image();
+            img.onload = function() {
+                const tempCanvas = document.createElement('canvas');
+                let width = img.width;
+                let height = img.height;
+
+                if (width > height) {
+                    if (width > maxAncho) {
+                        height *= maxAncho / width;
+                        width = maxAncho;
+                    }
+                } else {
+                    if (height > maxAlto) {
+                        width *= maxAlto / height;
+                        height = maxAlto;
+                    }
+                }
+                tempCanvas.width = width;
+                tempCanvas.height = height;
+                const tempCtx = tempCanvas.getContext('2d');
+                tempCtx.drawImage(img, 0, 0, width, height);
+                
+                // Devolvemos la imagen ultra-comprimida en JPEG de baja carga
+                resolve(tempCanvas.toDataURL('image/jpeg', 0.7));
+            };
+            img.onerror = reject;
+            img.src = e.target.result;
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+    });
+}
+
+// FUNCIÓN DE DIBUJO OPTIMIZADA
 async function generarCarnet() {
     return new Promise((resolve, reject) => {
         const plantilla = new Image();
         plantilla.crossOrigin = "Anonymous";
         plantilla.src = 'plantilla.jpg';
 
-        plantilla.onload = function() {
-            // DETECTOR DE MÓVIL PARA AJUSTAR LA RESOLUCIÓN Y AHORRAR RAM
+        plantilla.onload = async function() {
             const esMovil = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent) || (window.innerWidth <= 800);
-            
-            // Si es móvil, usamos la mitad de resolución (escala 0.5) para que no crasheé. En PC, 100% (escala 1).
             const escala = esMovil ? 0.5 : 1;
             
             canvas.width = 1600 * escala;
             canvas.height = 1135 * escala;
             ctx.drawImage(plantilla, 0, 0, canvas.width, canvas.height);
 
-            // Ajustamos las fuentes según la escala del lienzo
             ctx.fillStyle = '#1a1a1a';
             ctx.font = `bold ${Math.round(45 * escala)}px Arial`;
-            
             ctx.fillText(document.getElementById('nombre').value.toUpperCase(), 599 * escala, 427 * escala);
             ctx.fillText(document.getElementById('apellido').value.toUpperCase(), 599 * escala, 561 * escala);
 
@@ -52,7 +84,6 @@ async function generarCarnet() {
             ctx.fillText(document.getElementById('direccion').value, 609 * escala, 808 * escala);
             ctx.fillText(document.getElementById('email').value, 730 * escala, 887 * escala);
 
-            // --- DIBUJAR NÚMERO DE CARNET AUTOMÁTICO ---
             ctx.fillStyle = '#1a1a1a'; 
             ctx.font = `bold ${Math.round(45 * escala)}px Arial`; 
             ctx.fillText(`Nº ${numeroCarnetActual}`, 1073 * escala, 1019 * escala);
@@ -72,11 +103,12 @@ async function generarCarnet() {
                 return;
             }
 
-            const reader = new FileReader();
-            reader.onload = function(event) {
+            try {
+                // Comprimimos la foto del alumno sobre la marcha a un tamaño ridículamente ligero para la RAM
+                const fotoReducidaBase64 = await optimizarImagenUsuario(fotoFile, 500, 700);
+                
                 const fotoImg = new Image();
                 fotoImg.onload = function() {
-                    // Escalamos las coordenadas del marco de la foto del alumno
                     const mX = 48 * escala, mY = 335 * escala, mAncho = 477 * escala, mAlto = 650 * escala;
                     let fX, fY, fAncho, fAlto;
                     const propMarco = mAncho / mAlto;
@@ -96,15 +128,16 @@ async function generarCarnet() {
                     canvas.style.display = "inline-block";
                     resolve();
                 };
-                fotoImg.src = event.target.result;
-            };
-            reader.readAsDataURL(fotoFile);
+                fotoImg.src = fotoReducidaBase64;
+            } catch (err) {
+                reject("Error al procesar la foto del usuario: " + err);
+            }
         };
         plantilla.onerror = () => reject("No se pudo cargar la plantilla.jpg");
     });
 }
 
-// VISTA PREVIA (Convertida a imagen real para evitar congelamientos en móviles)
+// VISTA PREVIA
 previewBtn.addEventListener('click', async () => {
     if (form.checkValidity()) {
         try {
@@ -113,8 +146,7 @@ previewBtn.addEventListener('click', async () => {
             
             await generarCarnet();
             
-            // Convertimos el canvas a formato imagen estándar
-            const imgData = canvas.toDataURL('image/jpeg', 0.9);
+            const imgData = canvas.toDataURL('image/jpeg', 0.8);
             
             let contenedorPreview = document.getElementById('previewTitle');
             if (contenedorPreview) contenedorPreview.style.display = 'block';
@@ -130,7 +162,7 @@ previewBtn.addEventListener('click', async () => {
             }
             
             imagenExistente.src = imgData;
-            canvas.style.display = "none"; // Escondemos el canvas para liberar RAM en el móvil
+            canvas.style.display = "none"; 
             
             imagenExistente.scrollIntoView({ behavior: 'smooth' });
             previewBtn.innerText = "Vista Previa";
@@ -145,7 +177,7 @@ previewBtn.addEventListener('click', async () => {
     }
 });
 
-// FORMULARIO SUBMIT: Envía a Google Sheets y procesa la descarga o el Plan de Emergencia
+// FORMULARIO SUBMIT
 form.addEventListener('submit', async (e) => {
     e.preventDefault();
     
@@ -162,7 +194,6 @@ form.addEventListener('submit', async (e) => {
         return;
     }
     
-    // 1. Guardar los datos en el Google Sheet
     const datosAlumno = {
         numero: numeroCarnetActual,
         nombre: document.getElementById('nombre').value,
@@ -180,14 +211,12 @@ form.addEventListener('submit', async (e) => {
         console.error("Error BD:", error);
     }
     
-    // 2. DETECTOR DE DISPOSITIVOS MÓVILES REFORZADO
     const esPantallaPequena = window.innerWidth <= 800;
     const esTactil = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
     const esUserAgentMovil = /iPhone|iPad|iPod|Android|webOS|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
     
     if (esUserAgentMovil || esPantallaPequena || esTactil) {
-        // MODO MÓVIL: Cartel flotante nativo con compresión optimizada
-        const imgData = canvas.toDataURL('image/jpeg', 0.9);
+        const imgData = canvas.toDataURL('image/jpeg', 0.8);
         
         const aviso = document.createElement('div');
         aviso.style.position = 'fixed';
@@ -228,7 +257,6 @@ form.addEventListener('submit', async (e) => {
         downloadBtn.innerText = "Descargar PDF";
 
     } else {
-        // MODO PC/DESKTOP: Generación y descarga tradicional de jsPDF
         const { jsPDF } = window.jspdf;
         const pdf = new jsPDF('p', 'mm', 'a4');
         const anchoMM = 120; 
@@ -236,7 +264,7 @@ form.addEventListener('submit', async (e) => {
         const x = (210 - anchoMM) / 2; 
         const y = 20; 
 
-        const imgData = canvas.toDataURL('image/jpeg', 1.0);
+        const imgData = canvas.toDataURL('image/jpeg', 0.9);
         pdf.addImage(imgData, 'JPEG', x, y, anchoMM, altoMM);
 
         try {
@@ -252,7 +280,6 @@ form.addEventListener('submit', async (e) => {
         pdf.save(`Carnet_${document.getElementById('nombre').value}.pdf`);
     }
 
-    // 3. Actualizar número para la siguiente petición
     obtenerSiguienteNumero().then(() => {
         downloadBtn.disabled = false;
         downloadBtn.innerText = "Descargar PDF";
