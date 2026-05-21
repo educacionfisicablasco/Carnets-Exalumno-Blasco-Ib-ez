@@ -138,7 +138,7 @@ previewBtn.addEventListener('click', async () => {
     }
 });
 
-// FORMULARIO SUBMIT: Envía a Google Sheets y descarga
+// FORMULARIO SUBMIT: Envía a Google Sheets y muestra descarga
 form.addEventListener('submit', async (e) => {
     e.preventDefault();
     
@@ -149,7 +149,7 @@ form.addEventListener('submit', async (e) => {
     try {
         await generarCarnet();
     } catch(err) {
-        alert("Error al procesar: " + err);
+        alert("Error al procesar el carnet: " + err);
         downloadBtn.disabled = false;
         downloadBtn.innerText = "Descargar PDF";
         return;
@@ -170,24 +170,31 @@ form.addEventListener('submit', async (e) => {
             body: JSON.stringify(datosAlumno)
         });
     } catch (error) {
-        console.error("Error BD:", error);
+        console.error("Error al guardar en la base de datos:", error);
     }
     
-    // 2. Descarga del PDF o Alternativa lesiva para Móviles
-    const esMovil = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+    // 2. DETECTOR DE MÓVIL REFORZADO (Filtra pantallas pequeñas, pantallas táctiles y UserAgent)
+    const esPantallaPequena = window.innerWidth <= 800;
+    const esTactil = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
+    const esUserAgentMovil = /iPhone|iPad|iPod|Android|webOS|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
     
-    if (esMovil) {
-        // PLAN DE EMERGENCIA ANDROID: Mostramos la imagen para descargar con el dedo de forma nativa
+    // Si cumple cualquiera de las tres, se activa el modo móvil
+    if (esUserAgentMovil || esPantallaPequena || esTactil) {
+        
+        // Convertimos a imagen de alta calidad
         const imgData = canvas.toDataURL('image/jpeg', 1.0);
         
+        // Creamos el cartel flotante de emergencia
         const aviso = document.createElement('div');
         aviso.style.position = 'fixed';
-        aviso.style.top = '10%';
+        aviso.style.top = '5%';
         aviso.style.left = '5%';
         aviso.style.width = '90%';
+        aviso.style.maxHeight = '90%';
+        aviso.style.overflowY = 'auto';
         aviso.style.backgroundColor = '#ffffff';
-        aviso.style.boxShadow = '0 20px 50px rgba(0,0,0,0.3)';
-        aviso.style.borderRadius = '20px';
+        aviso.style.boxShadow = '0 20px 60px rgba(0,0,0,0.4)';
+        aviso.style.borderRadius = '25px';
         aviso.style.padding = '25px';
         aviso.style.zIndex = '999999';
         aviso.style.textAlign = 'center';
@@ -195,11 +202,16 @@ form.addEventListener('submit', async (e) => {
         aviso.style.boxSizing = 'border-box';
         
         aviso.innerHTML = `
-            <h3 style="color:#1e293b; margin-top:0;">¡Carnet Listo!</h3>
-            <p style="color:#475569; font-size:14px;">En móviles, mantén pulsada la imagen de abajo y selecciona <b>"Descargar imagen"</b> para guardarla en tu galería.</p>
-            <img src="${imgData}" style="width:100%; max-width:350px; border-radius:10px; margin: 15px 0; border:1px solid #ddd;"/>
+            <h3 style="color:#1e293b; margin-top:0; font-size:22px; font-weight:800;">¡Tu Carnet está listo!</h3>
+            <p style="color:#475569; font-size:14px; line-height:1.4; margin-bottom:15px;">
+                Debido a las normas de seguridad de tu móvil, debes guardarlo manualmente:<br>
+                <b>Mantén pulsada la imagen</b> y selecciona <b>"Descargar imagen"</b> (o "Guardar en carrete").
+            </p>
+            <img src="${imgData}" style="width:100%; max-width:340px; border-radius:15px; margin: 10px 0; border:2px solid #9900ff; box-shadow: 0 5px 15px rgba(0,0,0,0.1);"/>
             <br>
-            <button id="cerrarAvisoBtn" style="background:#0062ff; color:white; border:none; padding:10px 25px; border-radius:50px; font-weight:bold; margin-top:10px;">Entendido</button>
+            <button id="cerrarAvisoBtn" style="background:linear-gradient(135deg, #0062ff, #9900ff); color:white; border:none; padding:12px 35px; border-radius:50px; font-weight:bold; font-size:16px; margin-top:15px; cursor:pointer; box-shadow:0 5px 15px rgba(0,98,255,0.3);">
+                Volver al formulario
+            </button>
         `;
         
         document.body.appendChild(aviso);
@@ -212,7 +224,7 @@ form.addEventListener('submit', async (e) => {
         downloadBtn.innerText = "Descargar PDF";
 
     } else {
-        // En ordenadores el sistema jsPDF tradicional funciona perfecto
+        // En ordenadores (PC/Mac) el sistema jsPDF tradicional de descarga directa
         const { jsPDF } = window.jspdf;
         const pdf = new jsPDF('p', 'mm', 'a4');
         const anchoMM = 120; 
@@ -236,11 +248,9 @@ form.addEventListener('submit', async (e) => {
         pdf.save(`Carnet_${document.getElementById('nombre').value}.pdf`);
     }
 
-    // 3. Actualizar número para el próximo
+    // 3. Actualizar número para el próximo carnet
     obtenerSiguienteNumero().then(() => {
-        if (!esMovil) {
-            downloadBtn.disabled = false;
-            downloadBtn.innerText = "Descargar PDF";
-        }
+        downloadBtn.disabled = false;
+        downloadBtn.innerText = "Descargar PDF";
     });
 });
